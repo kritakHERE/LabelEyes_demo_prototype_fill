@@ -1,0 +1,6 @@
+{
+  "name": "LabelEyes",
+  "description": "Personal skincare ingredient companion: scan product labels on-device, check your skin profile and allergens, and find suitable products locally.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

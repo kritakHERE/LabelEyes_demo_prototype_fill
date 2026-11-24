@@ -1,0 +1,177 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'aethorsolis@gmail.com'
+      );
+    }
+
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.role is string && data.role in ['user', 'admin'] &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSkinProfile(data, userId) {
+      return data.keys().hasAll(['userId', 'skinType', 'sensitivity', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'skinType', 'sensitivity', 'concerns', 'flags', 'conditionFlag', 'confidence', 'overrides', 'updatedAt']) &&
+        data.userId == userId &&
+        data.skinType is string && data.skinType in ['oily', 'dry', 'combination', 'normal'] &&
+        data.sensitivity is string && data.sensitivity in ['low', 'medium', 'high'] &&
+        (!('concerns' in data) || (data.concerns is list && data.concerns.size() <= 12 && (data.concerns.size() == 0 || data.concerns[0] is string))) &&
+        (!('conditionFlag' in data) || data.conditionFlag is bool) &&
+        (!('confidence' in data) || (data.confidence is int && data.confidence >= 0 && data.confidence <= 100)) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAllergen(data, userId) {
+      return data.keys().hasAll(['userId', 'severity', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'ingredientId', 'groupId', 'customText', 'severity', 'createdAt']) &&
+        data.userId == userId &&
+        data.severity is string && data.severity in ['allergy', 'sensitivity'] &&
+        (!('ingredientId' in data) || (data.ingredientId is string && data.ingredientId.size() <= 120)) &&
+        (!('groupId' in data) || (data.groupId is string && data.groupId.size() <= 120)) &&
+        (!('customText' in data) || (data.customText is string && data.customText.size() <= 120)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidScan(data, userId) {
+      return data.keys().hasAll(['userId', 'source', 'verdictLevel', 'verdictLabel', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'source', 'productName', 'verdictLevel', 'verdictLabel', 'counts', 'unknownShare', 'ocrConfidence', 'ingredients', 'createdAt']) &&
+        data.userId == userId &&
+        data.source is string && data.source in ['ocr', 'manual', 'sample', 'barcode'] &&
+        data.verdictLevel is string && data.verdictLevel in ['allergen', 'caution', 'suitable'] &&
+        data.verdictLabel is string && data.verdictLabel.size() >= 1 && data.verdictLabel.size() <= 160 &&
+        (!('productName' in data) || (data.productName is string && data.productName.size() <= 160)) &&
+        (!('unknownShare' in data) || (data.unknownShare is number && data.unknownShare >= 0 && data.unknownShare <= 1)) &&
+        (!('ocrConfidence' in data) || (data.ocrConfidence is number && data.ocrConfidence >= 0 && data.ocrConfidence <= 100)) &&
+        (!('ingredients' in data) || (data.ingredients is list && data.ingredients.size() <= 120)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidRoutine(data, userId) {
+      return data.keys().hasAll(['userId', 'name', 'period', 'productIds', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'name', 'period', 'productIds', 'createdAt']) &&
+        data.userId == userId &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.period is string && data.period in ['AM', 'PM'] &&
+        data.productIds is list && data.productIds.size() <= 20 &&
+        (data.productIds.size() == 0 || data.productIds[0] is string) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidIngredientReport(data) {
+      return data.keys().hasAll(['userId', 'rawName', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'rawName', 'context', 'createdAt']) &&
+        data.userId == request.auth.uid &&
+        data.rawName is string && data.rawName.size() >= 1 && data.rawName.size() <= 160 &&
+        (!('context' in data) || (data.context is string && data.context.size() <= 300)) &&
+        data.createdAt is timestamp;
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
+      allow list, write: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) &&
+        isValidUserAccount(incoming()) &&
+        incoming().uid == userId &&
+        incoming().role == 'user' &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(userId) && (isOwner(userId) || isAdmin()) &&
+        isValidUserAccount(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        (isAdmin() || (incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email'])));
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      match /profile/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+        allow create: if isValidId(userId) && isValidId(docId) && isOwner(userId) &&
+          isValidSkinProfile(incoming(), userId) && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(docId) && (isOwner(userId) || isAdmin()) &&
+          isValidSkinProfile(incoming(), userId) && incoming().userId == existing().userId &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['skinType', 'sensitivity', 'concerns', 'flags', 'conditionFlag', 'confidence', 'overrides', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(docId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /allergens/{allergenId} {
+        allow get: if isValidId(userId) && isValidId(allergenId) && (isOwner(userId) || isAdmin());
+        allow list: if (isOwner(userId) && resource.data.userId == request.auth.uid) || isAdmin();
+        allow create: if isValidId(userId) && isValidId(allergenId) && isOwner(userId) &&
+          isValidAllergen(incoming(), userId) && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(allergenId) && (isOwner(userId) || isAdmin()) &&
+          isValidAllergen(incoming(), userId) && incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['severity', 'customText']);
+        allow delete: if isValidId(userId) && isValidId(allergenId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /scans/{scanId} {
+        allow get: if isValidId(userId) && isValidId(scanId) && (isOwner(userId) || isAdmin());
+        allow list: if (isOwner(userId) && resource.data.userId == request.auth.uid) || isAdmin();
+        allow create: if isValidId(userId) && isValidId(scanId) && isOwner(userId) &&
+          isValidScan(incoming(), userId) && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(scanId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /routines/{routineId} {
+        allow get: if isValidId(userId) && isValidId(routineId) && (isOwner(userId) || isAdmin());
+        allow list: if (isOwner(userId) && resource.data.userId == request.auth.uid) || isAdmin();
+        allow create: if isValidId(userId) && isValidId(routineId) && isOwner(userId) &&
+          isValidRoutine(incoming(), userId) && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(routineId) && (isOwner(userId) || isAdmin()) &&
+          isValidRoutine(incoming(), userId) && incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'period', 'productIds']);
+        allow delete: if isValidId(userId) && isValidId(routineId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    match /ingredientReports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(reportId) && isSignedIn() &&
+        isValidIngredientReport(incoming()) && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(reportId) && isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+  }
+}

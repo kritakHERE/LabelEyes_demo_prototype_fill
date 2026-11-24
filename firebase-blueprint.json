@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authenticated LabelEyes user profile metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "SkinProfile": {
+      "title": "SkinProfile",
+      "description": "User skin profile derived from Skin Lab quiz and manual overrides.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "skinType": { "type": "string", "enum": ["oily", "dry", "combination", "normal"] },
+        "sensitivity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "concerns": { "type": "array" },
+        "conditionFlag": { "type": "boolean" },
+        "confidence": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "skinType", "sensitivity", "updatedAt"]
+    },
+    "AllergenEntry": {
+      "title": "AllergenEntry",
+      "description": "User declared ingredient or group allergen/sensitivity.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ingredientId": { "type": "string", "maxLength": 120 },
+        "groupId": { "type": "string", "maxLength": 120 },
+        "customText": { "type": "string", "maxLength": 120 },
+        "severity": { "type": "string", "enum": ["allergy", "sensitivity"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "severity", "createdAt"]
+    },
+    "ScanRecord": {
+      "title": "ScanRecord",
+      "description": "Saved text-only ingredient scan analysis (no images stored).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "source": { "type": "string", "enum": ["ocr", "manual", "sample", "barcode"] },
+        "productName": { "type": "string", "maxLength": 160 },
+        "verdictLevel": { "type": "string", "enum": ["allergen", "caution", "suitable"] },
+        "verdictLabel": { "type": "string", "maxLength": 160 },
+        "unknownShare": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "source", "verdictLevel", "verdictLabel", "createdAt"]
+    },
+    "RoutineEntry": {
+      "title": "RoutineEntry",
+      "description": "Saved AM or PM skincare routine product list.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "period": { "type": "string", "enum": ["AM", "PM"] },
+        "productIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "period", "productIds", "createdAt"]
+    },
+    "IngredientReport": {
+      "title": "IngredientReport",
+      "description": "User report for an unrecognised ingredient name.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "rawName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "context": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "rawName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private user account metadata."
+    },
+    "/users/{userId}/profile/{docId}": {
+      "schema": { "$ref": "#/entities/SkinProfile" },
+      "description": "User skin profile, traits, and overrides."
+    },
+    "/users/{userId}/allergens/{allergenId}": {
+      "schema": { "$ref": "#/entities/AllergenEntry" },
+      "description": "User declared allergens and sensitivities."
+    },
+    "/users/{userId}/scans/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanRecord" },
+      "description": "Saved ingredient scan results."
+    },
+    "/users/{userId}/routines/{routineId}": {
+      "schema": { "$ref": "#/entities/RoutineEntry" },
+      "description": "Saved AM/PM skincare routines."
+    },
+    "/ingredientReports/{reportId}": {
+      "schema": { "$ref": "#/entities/IngredientReport" },
+      "description": "Submitted unrecognised ingredient reports for admin review."
+    }
+  }
+}

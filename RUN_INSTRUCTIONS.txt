@@ -1,0 +1,26 @@
+Go to:
+https://github.com/kritakHERE/LabelEyes_demo_prototype_fill
+
+
+LabelEyes - How to Run
+
+First time:
+1. Install Node.js 22 LTS if it is not already installed.
+2. Open this project folder in VS Code.
+3. Open Terminal > New Terminal.
+4. Install the project packages:
+   npm install
+5. Start the app:
+   npm run dev
+6. Open this address in your browser:
+   http://localhost:3000
+
+Keep the terminal open while using the app. Do not open http://0.0.0.0:3000.
+
+Next time:
+1. Open the project folder in VS Code.
+2. Open a terminal and run:
+   npm run dev
+3. Visit http://localhost:3000
+
+To stop the app, click the terminal and press Ctrl+C.
